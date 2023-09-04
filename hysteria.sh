@@ -49,7 +49,7 @@ if [[ -z $(type -P curl) ]]; then
 fi
 
 realip(){
-    ip=$(curl -s4m8 ip.p3terx.com -k | sed -n 1p) || ip=$(curl -s6m8 ip.p3terx.com -k | sed -n 1p)
+    ip=$(curl -s6m8 ip.p3terx.com -k | sed -n 1p) || ip=$(curl -s4m8 ip.p3terx.com -k | sed -n 1p)
 }
 
 inst_cert(){
@@ -84,7 +84,7 @@ inst_cert(){
             [[ -z $domain ]] && red "未输入域名，无法执行操作！" && exit 1
             green "已输入的域名：$domain" && sleep 1
             domainIP=$(curl -sm8 ipget.net/?ip="${domain}")
-          
+            if [[ $domainIP == $ip ]]; then
                 ${PACKAGE_INSTALL[int]} curl wget sudo socat openssl
                 if [[ $SYSTEM == "CentOS" ]]; then
                     ${PACKAGE_INSTALL[int]} cronie
@@ -114,7 +114,14 @@ inst_cert(){
                     yellow "私钥key文件路径如下: /root/private.key"
                     hy_domain=$domain
                 fi
-
+            else
+                red "当前域名解析的IP与当前VPS使用的真实IP不匹配"
+                green "建议如下："
+                yellow "1. 请确保CloudFlare小云朵为关闭状态(仅限DNS), 其他域名解析或CDN网站设置同理"
+                yellow "2. 请检查DNS解析设置的IP是否为VPS的真实IP"
+                yellow "3. 脚本可能跟不上时代, 建议截图发布到GitHub Issues、GitLab Issues、论坛或TG群询问"
+                exit 1
+            fi
         fi
     elif [[ $certInput == 3 ]]; then
         read -p "请输入公钥文件 crt 的路径：" certpath
