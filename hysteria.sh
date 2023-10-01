@@ -49,7 +49,7 @@ if [[ -z $(type -P curl) ]]; then
 fi
 
 realip(){
-    ip=$(curl -s6m8 ip.p3terx.com -k | sed -n 1p) || ip=$(curl -s4m8 ip.p3terx.com -k | sed -n 1p)
+    ip=$(curl -s6m8 ip.sb -k) || ip=$(curl -s4m8 ip.sb -k)
 }
 
 inst_cert(){
@@ -63,6 +63,9 @@ inst_cert(){
     if [[ $certInput == 2 ]]; then
         cert_path="/root/cert.crt"
         key_path="/root/private.key"
+
+        chmod a+x /root # 让 Hysteria 主程序访问到 /root 目录
+
         if [[ -f /root/cert.crt && -f /root/private.key ]] && [[ -s /root/cert.crt && -s /root/private.key ]] && [[ -f /root/ca.log ]]; then
             domain=$(cat /root/ca.log)
             green "检测到原有域名：$domain 的证书，正在应用"
@@ -73,11 +76,11 @@ inst_cert(){
             if [[ $WARPv4Status =~ on|plus ]] || [[ $WARPv6Status =~ on|plus ]]; then
                 wg-quick down wgcf >/dev/null 2>&1
                 systemctl stop warp-go >/dev/null 2>&1
-                ip=$(curl -s4m8 ip.p3terx.com -k | sed -n 1p) || ip=$(curl -s6m8 ip.p3terx.com -k | sed -n 1p)
+                realip
                 wg-quick up wgcf >/dev/null 2>&1
                 systemctl start warp-go >/dev/null 2>&1
             else
-                ip=$(curl -s4m8 ip.p3terx.com -k | sed -n 1p) || ip=$(curl -s6m8 ip.p3terx.com -k | sed -n 1p)
+                realip
             fi
             
             read -p "请输入需要申请证书的域名：" domain
@@ -124,10 +127,10 @@ inst_cert(){
             fi
         fi
     elif [[ $certInput == 3 ]]; then
-        read -p "请输入公钥文件 crt 的路径：" certpath
-        yellow "公钥文件 crt 的路径：$certpath "
-        read -p "请输入密钥文件 key 的路径：" keypath
-        yellow "密钥文件 key 的路径：$keypath "
+        read -p "请输入公钥文件 crt 的路径：" cert_path
+        yellow "公钥文件 crt 的路径：$cert_path "
+        read -p "请输入密钥文件 key 的路径：" key_path
+        yellow "密钥文件 key 的路径：$key_path "
         read -p "请输入证书的域名：" domain
         yellow "证书域名：$domain"
         hy_domain=$domain
@@ -267,9 +270,16 @@ EOF
         last_port=$port
     fi
 
+    # 给 IPv6 地址加中括号
+    if [[ -n $(echo $ip | grep ":") ]]; then
+        last_ip="[$ip]"
+    else
+        last_ip=$ip
+    fi
+
     mkdir /root/hy
     cat << EOF > /root/hy/hy-client.yaml
-server: $ip:$last_port
+server: $last_ip:$last_port
 
 auth: $auth_pwd
 
@@ -294,7 +304,7 @@ transport:
 EOF
     cat << EOF > /root/hy/hy-client.json
 {
-  "server": "$ip:$last_port",
+  "server": "$last_ip:$last_port",
   "auth": "$auth_pwd",
   "tls": {
     "sni": "$hy_domain",
@@ -316,8 +326,40 @@ EOF
   }
 }
 EOF
-
-    url="hysteria2://$auth_pwd@$ip:$last_port/?insecure=1&sni=$hy_domain"
+    cat <<EOF > /root/hy/clash-meta.yaml
+mixed-port: 7890
+external-controller: 127.0.0.1:9090
+allow-lan: false
+mode: rule
+log-level: debug
+ipv6: true
+dns:
+  enable: true
+  listen: 0.0.0.0:53
+  enhanced-mode: fake-ip
+  nameserver:
+    - 8.8.8.8
+    - 1.1.1.1
+    - 114.114.114.114
+proxies:
+  - name: Misaka-Hysteria2
+    type: hysteria2
+    server: $last_ip
+    port: $port
+    password: $auth_pwd
+    sni: $hy_domain
+    skip-cert-verify: true
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies:
+      - Misaka-Hysteria2
+      
+rules:
+  - GEOIP,CN,DIRECT
+  - MATCH,Proxy
+EOF
+    url="hysteria2://$auth_pwd@$last_ip:$last_port/?insecure=1&sni=$hy_domain#Misaka-Hysteria2"
     echo $url > /root/hy/url.txt
 
     systemctl daemon-reload
@@ -334,6 +376,7 @@ EOF
     red "$(cat /root/hy/hy-client.yaml)"
     yellow "Hysteria 2 客户端 JSON 配置文件 hy-client.json 内容如下，并保存到 /root/hy/hy-client.json"
     red "$(cat /root/hy/hy-client.json)"
+    yellow "Clash Meta 客户端配置文件已保存到 /root/hy/clash-meta.yaml"
     yellow "Hysteria 2 节点分享链接如下，并保存到 /root/hy/url.txt"
     red "$(cat /root/hy/url.txt)"
 }
@@ -470,6 +513,7 @@ showconf(){
     red "$(cat /root/hy/hy-client.yaml)"
     yellow "Hysteria 2 客户端 JSON 配置文件 hy-client.json 内容如下，并保存到 /root/hy/hy-client.json"
     red "$(cat /root/hy/hy-client.json)"
+    yellow "Clash Meta 客户端配置文件已保存到 /root/hy/clash-meta.yaml"
     yellow "Hysteria 2 节点分享链接如下，并保存到 /root/hy/url.txt"
     red "$(cat /root/hy/url.txt)"
 }
