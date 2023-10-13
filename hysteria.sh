@@ -71,8 +71,8 @@ inst_cert(){
             green "检测到原有域名：$domain 的证书，正在应用"
             hy_domain=$domain
         else
-            WARPv4Status=$(curl -s6m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
-            WARPv6Status=$(curl -s4m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
+            WARPv4Status=$(curl -s4m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
+            WARPv6Status=$(curl -s6m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
             if [[ $WARPv4Status =~ on|plus ]] || [[ $WARPv6Status =~ on|plus ]]; then
                 wg-quick down wgcf >/dev/null 2>&1
                 systemctl stop warp-go >/dev/null 2>&1
@@ -207,7 +207,7 @@ inst_site(){
 insthysteria(){
     warpv6=$(curl -s6m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
     warpv4=$(curl -s4m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
-    if [[ $warpv6 =~ on|plus || $warpv4 =~ on|plus ]]; then
+    if [[ $warpv4 =~ on|plus || $warpv6 =~ on|plus ]]; then
         wg-quick down wgcf >/dev/null 2>&1
         systemctl stop warp-go >/dev/null 2>&1
         realip
@@ -519,6 +519,12 @@ showconf(){
     red "$(cat /root/hy/url.txt)"
 }
 
+update_core(){
+    wget -N https://raw.githubusercontent.com/Misaka-blog/hysteria-install/main/hy2/install_server.sh
+    bash install_server.sh
+    rm -f install_server.sh
+}
+
 menu() {
     clear
     echo "#############################################################"
@@ -539,6 +545,8 @@ menu() {
     echo -e " ${GREEN}4.${PLAIN} 修改 Hysteria 2 配置"
     echo -e " ${GREEN}5.${PLAIN} 显示 Hysteria 2 配置文件"
     echo " -------------"
+    echo -e " ${GREEN}6.${PLAIN} 更新 Hysteria 2 内核"
+    echo " -------------"
     echo -e " ${GREEN}0.${PLAIN} 退出脚本"
     echo ""
     read -rp "请输入选项 [0-5]: " menuInput
@@ -548,6 +556,7 @@ menu() {
         3 ) hysteriaswitch ;;
         4 ) changeconf ;;
         5 ) showconf ;;
+        6 ) update_core ;;
         * ) exit 1 ;;
     esac
 }
